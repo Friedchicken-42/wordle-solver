@@ -148,7 +148,7 @@ func main() {
         fmt.Println(common)
         result := readString(reader)
 
-        if (result == "wwwww") {
+        if (result == "eeeee") {
             fmt.Println("congrats")
             return
         }
@@ -193,22 +193,28 @@ func main() {
 
         //filter ok
         words = filter(words, func(word string) bool {
-            count := 0
-            for _, pair := range wordle.Ok {
-                in := false
-                for _, w := range word {
-                    if (w == pair.Char){
-                        in = true
-                    }
+            for _, pair := range wordle.Ok{
+                if(rune(word[pair.Position]) == pair.Char){
+                    return false
                 }
-                if(!in) { return false }
-
-                if(rune(word[pair.Position]) == pair.Char) { return false }
-
-                count++
             }
-
-            return count == len(wordle.Ok)
+            return true
         })
+
+        if(len(wordle.Ok) > 1){
+            words = filter(words, func(word string) bool {
+                count := 0
+                for _, pair := range wordle.Ok {
+                    for _, w := range word {
+                        if (w == pair.Char){
+                            return false
+                        }
+                    }
+                    count++
+                }
+
+                return count == len(wordle.Ok)
+            })
+        }
     }
 }
