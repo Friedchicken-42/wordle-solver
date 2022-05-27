@@ -1,71 +1,136 @@
+
 package main
 
 import (
 	"bufio"
 	"fmt"
 	"os"
-	"strconv"
 	"strings"
+
+	"github.com/Friedchicken-42/cli"
 )
 
-type Pair struct {
-    Char rune
-    Position int
+type Rule struct {
+	char     byte
+	position int
+	status   byte
+	done     bool
 }
 
-type Wordle struct {
-    Exact []Pair
-    Ok []Pair
-    Wrong []rune
-    Attemps int
+func (r Rule) String() string {
+    return fmt.Sprintf("[%c %d %c]", r.char, r.position, r.status)
 }
 
-func filter(arr []string, condition func(string) bool) []string {
+func filter(words []string, cond func(string) bool) []string {
     result := make([]string, 0)
-    for _, el := range arr {
-        if condition(el) {
-            result = append(result, el)
+
+    for _, word := range words {
+        if cond(word) {
+            result = append(result, word)
         }
     }
+
     return result
 }
 
-func letterFrequency(words []string) map[rune]int {
-    m := map[rune]int{}
+func Filter(words []string, rules []Rule) []string {
+    for _, rule := range rules {
+        if rule.done {
+            continue
+        }
 
-    for _, word := range words {
-        for _, c := range word {
-            m[c] += 1
+        if rule.status == 'e' {
+            words = filter(words, func(word string) bool {
+                return word[rule.position] == rule.char
+            })
+        } else if rule.status == 'o' {
+            words = filter(words, func(word string) bool {
+                count := 0
+                for i, w := range word {
+                    if w == rune(rule.char) {
+                        if i == rule.position {
+                            return false
+                        }
+                        count++;
+                    }
+                }
+                return count > 0
+            })
+        } else if rule.status == 'w' {
+            ok := false
+             for _, r := range rules {
+                 if r.status != 'w' && r.char == rule.char {
+                     ok = true
+                 }
+             }
+
+             if !ok {
+                 words = filter(words, func(word string) bool {
+                     for _, c := range word {
+                         if byte(c) == rule.char {
+                             return false
+                         }
+                     }
+                     return true
+                 })
+             }
+        }
+
+        rule.done = true
+    }
+
+	return words
+}
+
+func GenRules(word string, status string) []Rule {
+    rules := make([]Rule, 5)
+
+    for i, w := range word {
+        rules[i] = Rule{
+        	char:     byte(w),
+        	position: i,
+        	status:   status[i],
+        	done:     false,
         }
     }
 
-    return m
+    return rules
 }
 
-func wordFrequency(words []string, frequency map[rune]int) map[string]int {
+func CountLetters(words []string) map[rune]int {
+    frequency := map[rune]int{}
+
+    for _, w := range words {
+        for _, c := range w {
+            frequency[c] += 1
+        }
+    }
+
+    return frequency
+}
+
+func WordsFrequency(words []string, frequency map[rune]int) map[string]int {
     m := map[string]int{}
 
     for _, word := range words {
-        letters := map[rune]bool{}
-        res := 0
+        x := map[rune]bool{}
         for _, c := range word {
-            if !letters[c] {
-                res += frequency[rune(c)]
+            if !x[c] {
+                m[word] += frequency[c]
             }
-            letters[c] = true
+            x[c] = true
         }
-        m[word] = res
     }
 
     return m
 }
 
-func findMostCommon(m map[string]int) string {
+func GetHigher(wordsFrequency map[string]int) string {
     var word string
     var value int
 
-    for w, v := range m {
-        if (v > value) {
+    for w, v := range wordsFrequency {
+        if v > value {
             word = w
             value = v
         }
@@ -74,14 +139,19 @@ func findMostCommon(m map[string]int) string {
     return word
 }
 
-func (wordle *Wordle) clean() {
-    for _, a := range wordle.Exact {
-        for i, b := range wordle.Ok {
-            if a.Char == b.Char && a.Position == b.Position {
-                wordle.Ok = append(wordle.Ok[:i], wordle.Ok[i+1:]...)
-            }
-        }
+func FindMostCommon(words []string) string {
+    frequency := CountLetters(words)
+    for k, v := range frequency {
+        fmt.Print(string(k))
+        fmt.Printf(" %5d ", v)
+        fmt.Println()
     }
+
+    wordsFrequency := WordsFrequency(words, frequency)
+
+    higher := GetHigher(wordsFrequency)
+
+    return higher
 }
 
 func readString(reader *bufio.Reader) string {
@@ -91,125 +161,91 @@ func readString(reader *bufio.Reader) string {
     return data
 }
 
-func main() {
-    file, err := os.Open("words.txt")
-    if(err != nil){
-        panic(err)
-    }
+func Init() []string {
+	file, _ := os.Open("words.txt")
+	defer file.Close()
 
-    defer file.Close()
+	words := make([]string, 0)
+	scanner := bufio.NewScanner(file)
 
+	for scanner.Scan() {
+		word := scanner.Text()[:5]
+		words = append(words, word)
+	}
+
+    return words
+}
+
+func UserInput(words []string) {
     reader := bufio.NewReader(os.Stdin)
 
-    var word_length int
-    fmt.Print("word length: ")
-    text := readString(reader)
-    word_length, _ = strconv.Atoi(text)
-
-    scanner := bufio.NewScanner(file)
-
-    words := make([]string, 0)
-
-    for scanner.Scan() {
-        word := scanner.Text()
-        if len(word) == word_length {
-            words = append(words, word)
-        }
-    }
-    
-    wordle := Wordle{}
+    rules := []Rule{}
 
     for {
-        frequency_letters := letterFrequency(words)
-
-        for _, pair := range wordle.Exact {
-            frequency_letters[pair.Char] = 0
-        }
-        for _, pair := range wordle.Ok {
-            frequency_letters[pair.Char] = 0
-        }
-        for _, char := range wordle.Wrong {
-            frequency_letters[char] = 0
-        }
-
-        frequency_words := wordFrequency(words, frequency_letters)
-        common := findMostCommon(frequency_words)
-
-        if(len(words) == 1) {
-            fmt.Println("this is the only possible word: ", words[0])
-            readString(reader)
-            return
-
-        }else if (len(words) <= 10) {
-            fmt.Println("only these words remain: ", words)
-        }
-        fmt.Printf("try this word: \"%s\"\n", common)
-        fmt.Println("write the result with e/o/w [exact]/[ok]/[wrong]")
+        common := FindMostCommon(words)
         fmt.Println(common)
-        result := readString(reader)
 
-        if (result == "eeeee") {
-            fmt.Println("congrats")
-            return
+        res := readString(reader)
+
+        if res == "eeeee" {
+            break
         }
 
-        for i, c := range result {
-            char := rune(common[i])
-            switch(c){
-            case 'e':
-                wordle.Exact = append(wordle.Exact, Pair{char, i})
-            case 'o':
-                wordle.Ok = append(wordle.Ok, Pair{char, i})
-            case 'w':
-                wordle.Wrong = append(wordle.Wrong, char)
-            default:
-                panic("wrong input")
-            }
+        rules = append(rules, GenRules(common, res)...)
+	    words = Filter(words, rules)
+        fmt.Printf("words remaining: %d\n", len(words))
+        if len(words) == 1 {
+            fmt.Printf("only one word remains: \"%s\"\n", words[0])
+            break
+        } else if len(words) <= 10 {
+            fmt.Println(words)
         }
-        
-        wordle.clean()
+    }
 
-        //filter Wrong
-        words = filter(words, func(word string) bool {
-            for _, a := range wordle.Wrong {
-                for _, w := range word {
-                    if (w == a) { return false }
-                }
+}
+
+func Puzzle(words []string) {
+    reader := bufio.NewReader(os.Stdin)
+
+    rules := make([]Rule, 0)
+
+    for {
+        line := readString(reader)
+        if line == "" {
+            break
+        }
+        x := strings.Split(line, " ")
+        word, status := x[0], x[1]
+
+        rules = append(rules, GenRules(word, status)...)
+	    words = Filter(words, rules)
+    }
+
+    fmt.Println(rules)
+    fmt.Println(words)
+}
+
+func main() {
+    app := &cli.App{
+        Options: cli.Options{
+            &cli.Option{
+                Name: "puzzle",
+                Prompt: "puzzle",
+                IsFlag: true,
+            },
+        },
+        Action: func(c *cli.Context) error {
+            words := Init()
+            if _, ok := c.Get("puzzle"); ok {
+                Puzzle(words)
+            } else {
+                UserInput(words)
             }
-            return true
-        })
+            return nil
+        },
+    }
 
-        //filter exact
-        words = filter(words, func(word string) bool {
-            count := 0
-            for _, pair := range wordle.Exact {
-                if(rune(word[pair.Position]) == pair.Char){
-                    count++
-                }
-            }
-
-            return count == len(wordle.Exact)
-        })
-
-        //filter ok
-
-        words = filter(words, func(word string) bool {
-            count := 0
-            for _, pair := range wordle.Ok {
-                in := false
-                for _, w := range word {
-                    if (w == pair.Char){
-                        in = true
-                    }
-                }
-                if(!in) { return false }
-
-                if(rune(word[pair.Position]) == pair.Char) { return false }
-
-                count++
-            }
-
-            return count == len(wordle.Ok)
-        })
+    if err := app.Run(os.Args); err != nil {
+        panic(err)
     }
 }
