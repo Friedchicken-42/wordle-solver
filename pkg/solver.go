@@ -1,13 +1,10 @@
-
-package main
+package pkg
 
 import (
 	"bufio"
 	"fmt"
 	"os"
 	"strings"
-
-	"github.com/Friedchicken-42/cli"
 )
 
 type Rule struct {
@@ -141,11 +138,11 @@ func GetHigher(wordsFrequency map[string]int) string {
 
 func FindMostCommon(words []string) string {
     frequency := CountLetters(words)
-    for k, v := range frequency {
-        fmt.Print(string(k))
-        fmt.Printf(" %5d ", v)
-        fmt.Println()
-    }
+    // for k, v := range frequency {
+        // fmt.Print(string(k))
+        // fmt.Printf(" %5d ", v)
+        // fmt.Println()
+    // }
 
     wordsFrequency := WordsFrequency(words, frequency)
 
@@ -154,32 +151,10 @@ func FindMostCommon(words []string) string {
     return higher
 }
 
-func readString(reader *bufio.Reader) string {
-    data, _ := reader.ReadString('\n')
-    data = strings.ReplaceAll(data, "\n", "")
-    data = strings.ReplaceAll(data, "\r", "")
-    return data
-}
-
-func Init() []string {
-	file, _ := os.Open("words.txt")
-	defer file.Close()
-
-	words := make([]string, 0)
-	scanner := bufio.NewScanner(file)
-
-	for scanner.Scan() {
-		word := scanner.Text()[:5]
-		words = append(words, word)
-	}
-
-    return words
-}
-
 func UserInput(words []string) {
     reader := bufio.NewReader(os.Stdin)
 
-    rules := []Rule{}
+    rules := make([]Rule, 0)
 
     for {
         common := FindMostCommon(words)
@@ -223,29 +198,4 @@ func Puzzle(words []string) {
 
     fmt.Println(rules)
     fmt.Println(words)
-}
-
-func main() {
-    app := &cli.App{
-        Options: cli.Options{
-            &cli.Option{
-                Name: "puzzle",
-                Prompt: "puzzle",
-                IsFlag: true,
-            },
-        },
-        Action: func(c *cli.Context) error {
-            words := Init()
-            if _, ok := c.Get("puzzle"); ok {
-                Puzzle(words)
-            } else {
-                UserInput(words)
-            }
-            return nil
-        },
-    }
-
-    if err := app.Run(os.Args); err != nil {
-        panic(err)
-    }
 }
